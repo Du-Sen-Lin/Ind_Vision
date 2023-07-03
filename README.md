@@ -6,7 +6,7 @@ Industrial vision algorithms, optics, automation, etc
 --docs: documents.
 
 ## Log
-
+fix config info test
 ### Jun 28, 2023
 
 - 添加 "ubuntu装机.md" ,  系统ubuntu-20.04.6安装，30系显卡深度学习环境安装；
