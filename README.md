@@ -6,7 +6,11 @@ Industrial vision algorithms, optics, automation, etc
 --docs: documents.
 
 ## Log
-fix config info test
+### Jul 14, 2023
+
+- 添加 《C++工控机部署.md》
+- 添加《算法开发服务器（镜像_容器）管理.md》
+
 ### Jun 28, 2023
 
 - 添加 "ubuntu装机.md" ,  系统ubuntu-20.04.6安装，30系显卡深度学习环境安装；
