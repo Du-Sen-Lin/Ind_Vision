@@ -6,6 +6,11 @@ Industrial vision algorithms, optics, automation, etc
 --docs: documents.
 
 ## Log
+
+### Jul 17, 2023
+
+- 添加 《工业工控机环境运维.md》
+
 ### Jul 14, 2023
 
 - 添加 《C++工控机部署.md》
