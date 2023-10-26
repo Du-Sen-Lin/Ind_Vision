@@ -7,6 +7,11 @@ Industrial vision algorithms, optics, automation, etc
 
 ## Log
 
+### Sep 21, 2023
+
+- 添加 《02YOLO系列.md》
+- 添加 《06DL基础知识.md》
+
 ### Jul 17, 2023
 
 - 添加 《工业工控机环境运维.md》

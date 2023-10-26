@@ -14,7 +14,7 @@ Mul-scales: 多尺度融合；
 
 3、YOLO v4:
 
-输⼊端：Mosaic数据增强（丰富训练数据集；减少GPU数量）；cmBN; SAT⾃对抗训练；
+输⼊端：Mosaic数据增强（丰富训练数据集；减少GPU数量）；cmBN; SAT⾃对抗训练 (SAT 可以被看作是一种数据增强的方式，通过对输入图像施加随机扰动，例如旋转、缩放、平移等操作，以模拟现实世界中可能遇到的不确定性和变化)；
 
 Backbone: CSPDarkNet(参考cspnet, 增强CNN学习能⼒；降低计算瓶颈；降低内存成本)；Mish 激活函数；Dropblock（Dropout 随机失活，⼤量⽤在全连接层中；dropblock, ⽤在卷积神经⽹络中，受到cutout数据增强思想启发，多个局部区域，整体删减丢弃）;
 
@@ -117,6 +117,10 @@ Neck: SPP（四种最⼤池化⽅式，1x1; 5x5; 9x9; 13x13）; FPN(上采样，
 s://blog.csdn.net/junqing_wu/article/details/105598849
 
 输出层：CIoU_loss（⽤于坐标的回归损失函数）; DIoU_nms(缓解遮挡问题);
+IOU_Loss：主要考虑检测框和目标框重叠面积。
+GIOU_Loss：在IOU的基础上，解决边界框不重合时的问题。
+DIOU_Loss：在IOU和GIOU的基础上，考虑边界框中心点距离的信息。
+CIOU_Loss：在DIOU的基础上，考虑边界框宽高比的尺度信息。
 ```
 
 **mosaic数据增强**：采用了4张图片，随机缩放、随机裁剪、随机排布的方式进行拼接
@@ -159,8 +163,8 @@ Yolov5**大分辨率图像小目标检测**：
 ```markdown
 理解：
 •输⼊端：Mosaic数据增强；⾃适应锚框计算；⾃适应图⽚缩放；
-•Backbone: Focus结构；CSP结构； 
-•Neck: FPN + PAN结构，同yolov4; 
+•Backbone: Focus结构 （后期YOLOv5又将主干网络中的Focus层换成了标准卷积，作者的解释是模型可导出性的改进，因为现在正式支持YOLOv5在11个不同的后端进行推理，其中许多为新的Conv实现提供了更好的支持，而Focus层是为了更快的初始层启动和更小的mAP影响，但其结果受到硬件设施的影响较大，许多消费卡和一些企业卡（如T4）使用Focus层可以观察到更快的性能，但在其他卡（如V100/A100）的实施中卷积的表现会更好）；CSP结构； 
+•Neck: FPN + PAN结构，同yolov4;  修改SPP为SPPF
 •输出端：Bounding box的损失函数是CIoU_loss, 同yolov4; ⾮极⼤值抑制：DIoU_nms，同yolov4;
 
 与yolov4的不同：
@@ -285,13 +289,13 @@ Backbone + FPN + DecoupledHead （neck部分也可以采用FPN+PAN的结）
 
 ​		经过第三部分的标签匹配，⽬标框和正样本预测框对应起来了。然后计算两者的Loss, 位置损失函数：iou_loss/giou_loss; ⽬标损失函数：BCE_loss (⼆分类交叉熵损失函数); 分类损 失：BCE_loss. 注意：（1） 前⾯精细化筛选中，使⽤了reg_loss和cls_loss，筛选出和⽬标框所 对应的预测框。因此这⾥的iou_loss和cls_loss，只针对⽬标框和筛选出的正样本预测框进⾏计 算。⽽obj_loss，则还是针对8400个预测框； （2）在Decoupled Head中，cls_output和 obj_output使⽤了sigmoid函数进⾏归⼀化，但是在训练时，并没有使⽤sigmoid函数，原因是训 练时⽤的nn.BCEWithLogitsLoss函数，已经包含了sigmoid操作。
 
-#### (3) 版本:
+#### (3) 版本: 
 
 Yolox-s、Yolox-m、Yolox-l、Yolox-x系列 对Yolov5的四个版本，采⽤这些有效的trick，逐⼀进⾏改进，得到Yolox-s、Yolox-m、Yolox-l、 Yolox-x四个版本；
 
 ####  (4)轻量级⽹络：
 
-Yolox-Nano, Yolox-Tiny;
+Yolox-Nano, Yolox-Tiny; 
 
 
 
@@ -324,7 +328,7 @@ Rep-PAN：
 
 Head: 沿用了YOLOX的解耦头设计，不过并未对各个检测头进行降维的操作，而是选择减少网络的深度来减少各个部分的内存占用。此外，在anchor free的锚框分配策略中也沿用了SimOTA等方法来提升训练速度。参考了SloU边界框回归损失函数来监督网络的学习，通过引入了所需回归之间的向量角度，重新定义了距离损失，有效降低了回归的自由度，加快网络收敛，进一步提升了回归精度。
 
-```
+```markdown
 对解耦头进行了精简设计，同时综合考虑到相关算子表征能力和硬件上计算开销这两者的平衡，采用 Hybrid Channels 策略重新设计了一个更高效的解耦头结构，在维持精度的同时降低了延时，缓解了解耦头中 3x3 卷积带来的额外延时开销
 ```
 
@@ -338,7 +342,7 @@ Head: 沿用了YOLOX的解耦头设计，不过并未对各个检测头进行降
 
 传统的目标检测算法（如Faster R-CNN）使用预定义的锚框来进行目标检测，而Anchor-free方法则直接在特征图上预测目标的位置和类别，省略了锚框的设计和调整过程。
 
-Anchor-free: yolox, yolov6。      YOLOX 使用了一种称为“Detection Head”的结构来预测目标的位置和类别。这个结构包括了一系列的卷积层和激活函数，最终输出预测的目标位置、类别以及置信度。YOLOX 是一种基于 Anchor-free 无锚范式的目标检测算法，它没有预定义的锚框，直接在特征图上预测目标的位置和类别。**目标位置的预测**：YOLOX 使用了特定的结构来直接预测目标的中心点坐标、尺寸等信息，从而实现目标检测。
+Anchor-free: yolox, yolov6。      YOLOX 使用了一种称为“Decouple Head”的结构来预测目标的位置和类别。这个结构包括了一系列的卷积层和激活函数，最终输出预测的目标位置、类别以及置信度。YOLOX 是一种基于 Anchor-free 无锚范式的目标检测算法，它没有预定义的锚框，直接在特征图上预测目标的位置和类别。**目标位置的预测**：YOLOX 使用了特定的结构来直接预测目标的中心点坐标、尺寸等信息，从而实现目标检测。
 
 Anchor-based：yolov5。      YOLOv5 是一种基于锚框的目标检测算法，它在网络中预定义了一组锚框，用于在特征图上进行目标检测。 **锚框的选择**：在 YOLOv5 中，一般会通过聚类等方式来自动选择一组适应于数据集的锚框，这样可以使模型更好地适应具体的目标。 **模型结构**：YOLOv5 包括一个骨干网络（backbone）和若干个检测头（detection head），检测头负责预测目标的位置、类别和置信度。
 
@@ -360,7 +364,7 @@ Anchor-based：yolov5。      YOLOv5 是一种基于锚框的目标检测算法�
 
 SIoU 损失函数的计算公式如下：
 
-SIoU Loss=1−SIoU
+SIoU Loss = 1− SIoU
 
 其中，SIoU 的计算公式如下：
 
@@ -376,6 +380,23 @@ SIoU=Area of Intersection / Area of Smallest Enclosing Box
 相比于传统的 IoU 损失，SIoU 考虑了最小包围框，因此对于有重叠但不完全重合的情况，SIoU 的损失会更准确。
 
 SIoU 考虑了最小包围框，因此对于有重叠但不完全重合的情况，SIoU 的损失会更准确。
+
+
+
+### 4-3、2.0版本
+
+1. 针对中大型模型（YOLOv6-M/L），设计了新主干网络 CSPStackRep，它在综合性能上比上一版的 Single Path 结构更具优势。
+2. 针对不同网络，系统性地验证了各种最新策略/算法的优劣，综合精度和速度，为每类网络选择合适的方案。同时将模型整体训练时间减少了 50%，极大地提升了模型的训练效率。
+3. 引入自蒸馏思想并设计了新的学习策略，大幅提升了 YOLOv6-M/L 的模型精度。
+4. 通过训练时 Early Stop 强数据增强及推理时图像 Resize 优化策略，修复了前期版本中输入尺寸对齐到 640x640 后精度损失的问题，提升了现有模型的实际部署精度
+
+### 4-4、3.0版本
+
+本次更新主要在 Neck 网络设计、训练和蒸馏策略等方面进行了创新和优化：
+
+- 设计了表征能力更强的可重参化双向融合 PAN（RepBi-PAN）Neck 网络；
+- 提出了全新的锚点辅助训练（Anchor-Aided Training）策略；
+- 提出了解耦定位蒸馏（Decoupled Location Distillation）策略以提升小模型的性能。
 
 
 
