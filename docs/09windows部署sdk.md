@@ -84,7 +84,7 @@ https://developer.nvidia.com/
 5、vs2022属性表创建配置
 
 - 新建一个C++孔项目，项目设置为Debug、X64模式【DeployDemo】
-- [属性窗口] -> [右击Debug|x64] -> [添加新项目属性表] 【OpenCV4.7.0_DebugX64.props】
+- [属性窗口] -> [右击Debug|x64] -> [添加新项目属性表] 【OpenCV4.7.0_DebugX64.props】【OpenCV4.7.0_ReleaseX64.props】
 - 编辑属性表
 
 ```python
@@ -96,13 +96,118 @@ D:\package\vs\opencv\opencv\build\include\opencv2
 D:\package\vs\opencv\opencv\build\x64\vc16\lib
 # 【拷贝lib文件名称】[通用属性] -> [链接器] -> [输入] -> [附加依赖项] -> 将文件名"opencv_world470d.lib"拷贝进去
 
-# 创建TensorRT属性表
+# 创建TensorRT属性表 【TensorRT_X64.props】， debug与release下配置一致, 配置好之后主要release配置直接添加现有属性表即可。
+# include路径
+path/to/TensorRT-8.5.3.1/include
+path/to/TensorRT-8.5.3.1/samples/common
+path/to/TensorRT-8.5.3.1/samples/common/windows
+# lib路径
+path/to/TensorRT-8.5.3.1/lib
+# lib文件名称（for release& debug）
+nvinfer.lib
+nvinfer_plugin.lib
+nvonnxparser.lib
+nvparsers.lib
+# 最后，修改tensorrt属性表：[通用属性] -> [C/C++] -> [预处理器] -> [预处理器定义] -> 添加指令：_CRT_SECURE_NO_WARNINGS -> [确认]
 
 
-# 创建CUDA属性表
-
+# 创建CUDA属性表，直接添加现有属性表即可。
+# CUDA属性表直接使用官方的，路径为 C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.6\extras\visual_studio_integration\MSBuildExtensions\CUDA 11.6.props
 
 ```
+
+- cuda 和tensorrt的属性表同时兼容release x64 和debug x64，你再新建TensorRT-Alpha中yolov8 yolov7 yolov6 等项目后，只需要把上述提前做好的属性表引入到工程就行了，当然项目还需要进行简单设置(设置NVCC，避免tensorrt的坑)，在后文提到。属性表做到了一次新建，到处使用。
+
+- yolov8模型部署测试
+
+```python
+# Classes
+names:
+  0: abnormal_ob
+  1: plastic
+  2: insect
+  3: black_dot
+  4: stomium
+# /root/project/bp_algo/common/YOLO/ultralytics_yolov8/runs/detect/train10/weights/best.pt 
+# '/root/dataset/public/object_detect/dataset_yolo_hayao/dataset/images/val/Image_20230310171144605.bmp'
+
+# 模型转换,导出 onnx 文件 best_ds.onnx
+yolo export model=/root/project/bp_algo/common/YOLO/ultralytics_yolov8/runs/detect/train10/weights/best.pt format=onnx dynamic=True simplify=True
+# 模型转换,导出 onnx 文件 best.onnx
+yolo export model=/root/project/bp_algo/common/YOLO/ultralytics_yolov8/runs/detect/train10/weights/best.pt format=onnx
+
+# 使用 TensorRT 编译 onnx 文件
+D:/package/vs/TensorRT-8.5.3.1/bin/trtexec.exe --onnx=./best.onnx --saveEngine=./best.trt --buildOnly --minShapes=images:1x3x640x640 --optShapes=images:4x3x640x640 --maxShapes=images:8x3x640x640
+# error:
+"""
+[W] [TRT] onnx2trt_utils.cpp:377: Your ONNX model has been generated with INT64 weights, while TensorRT does not natively support INT64. Attempting to cast down to INT32.
+[01/11/2024-14:50:34] [I] Finish parsing network model
+[01/11/2024-14:50:34] [E] Static model does not take explicit shapes since the shape of inference tensors will be determined by the model itself
+[01/11/2024-14:50:34] [E] Network And Config setup failed
+[01/11/2024-14:50:34] [E] Building engine failed
+[01/11/2024-14:50:34] [E] Failed to create engine from model or file.
+[01/11/2024-14:50:34] [E] Engine set up failed
+"""
+# 警告原因以及解决方案：
+原因：NNX模型的参数类型是INT64, 这个可以从netron中看到。 TensorRT本身不支持INT64. 
+https://github.com/FeiYull/TensorRT-Alpha/issues/69 
+解决方案1：使用优化后的./best_ds.onnx， 忽略警告，看是否能够正常编译。
+# 错误原因
+# 静态模型不采用显式形状，因为推理张量的形状将由模型本身决定，使用dynamic导出的模型
+
+D:/package/vs/TensorRT-8.5.3.1/bin/trtexec.exe --onnx=./best_ds.onnx --saveEngine=./best_ds.trt --buildOnly --minShapes=images:1x3x640x640 --optShapes=images:4x3x640x640 --maxShapes=images:8x3x640x640
+"""
+[01/11/2024-15:31:31] [W] [TRT] onnx2trt_utils.cpp:377: Your ONNX model has been generated with INT64 weights, while TensorRT does not natively support INT64. Attempting to cast down to INT32.
+[01/11/2024-15:31:32] [I] Finish parsing network model
+[01/11/2024-15:31:33] [I] [TRT] [MemUsageChange] Init cuBLAS/cuBLASLt: CPU +966, GPU +346, now: CPU 14092, GPU 1665 (MiB)
+[01/11/2024-15:31:33] [I] [TRT] [MemUsageChange] Init cuDNN: CPU +153, GPU +56, now: CPU 14245, GPU 1721 (MiB)
+[01/11/2024-15:31:33] [I] [TRT] Local timing cache in use. Profiling results in this builder pass will not be stored.
+Could not locate zlibwapi.dll. Please make sure it is in your library path!
+"""
+# 错误原因分析： 没有安装zlip.
+# 安装并配置zlib： https://docs.nvidia.com/deeplearning/cudnn/install-guide/index.html#install-zlib-windows
+# 解决参考：https://blog.csdn.net/AugustMe/article/details/127791707
+# 下载：http://www.winimage.com/zLibDll/ 【选择AMD64/Intel EM64T，下载zlib123dllx64.zip】
+dll_x64文件夹下的zlibwapi.dll复制到C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.6\bin
+【我没有移动lib文件，有的技术博文说也要移，如果移动的话，复制到lib文件放到C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.6\lib】
+===成功转trt，存在很多警告warning。
+
+```
+
+```python
+# 参考 https://blog.csdn.net/weixin_42166222/article/details/130669596
+git clone https://github.com/FeiYull/TensorRT-Alpha.git
+# 将 TensorRT-Alpha/yolov8 中选中的文件拷贝到项目的 源文件 中
+
+# 将TensorRT-Alpha/utils 中选中的文件拷贝到项目的 头文件 中
+
+# 最后将TensorRT-8.4.3.1/samples/common 下的 logger.cpp、sampleOptions.cpp 文件拷贝到项目的 资源文件 中
+
+# 接下来设置 生成依赖项，选择 CUDA 11.6（若没有，见下文 遇到的问题 中有解决方案）
+
+# 然后设置 NVCC 编译 .cu及其对应头文件
+# 选择.cu文件右键 属性->项类型 更改为 CUDA C/C++ ，然后点击应用、确定即可
+
+# 最后，右键 DeployDemo -> 属性 -> 配置属性 -> 高级 -> 字符集，设置为 未设置
+
+# 点击 生成 -> 生成解决方案，直到成功
+# error: 解决方案：在资源文件中，将sampleOptions.cpp移除掉【https://blog.csdn.net/m0_72734364/article/details/128865904?spm=1001.2014.3001.5501】，ok！
+"""
+严重性	代码	说明	项目	文件	行	禁止显示状态
+错误	LNK2019	无法解析的外部符号 "class std::vector<class std::basic_string<char,struct std::char_traits<char>,class std::allocator<char> >,class std::allocator<class std::basic_string<char,struct std::char_traits<char>,class std::allocator<char> > > > __cdecl sample::splitToStringVec(class std::basic_string<char,struct std::char_traits<char>,class std::allocator<char> > const &,char)" (?splitToStringVec@sample@@YA?AV?$vector@V?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@V?$allocator@V?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@@2@@std@@AEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@3@D@Z)，函数 "struct std::pair<class std::basic_string<char,struct std::char_traits<char>,class std::allocator<char> >,double> __cdecl sample::`anonymous namespace'::splitNameAndValue<double>(class std::basic_string<char,struct std::char_traits<char>,class std::allocator<char> > const &)" (??$splitNameAndValue@N@?A0xb137924a@sample@@YA?AU?$pair@V?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@N@std@@AEBV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@3@@Z) 中引用了该符号	DeployDemo	D:\Wood\Code\C\vswork\DeployDemo\sampleOptions.obj	1	
+"""
+
+# 编译运行:修改为 类别数和类别名,类别数 在 app_yolov8.cpp 中修改, 类别名 在 utils.h 中修改
+{0: 'abnormal_ob', 1: 'plastic', 2: 'insect', 3: 'black_dot', 4: 'stomium'}
+
+# 使用如下命令进行图像的推理
+--model=D:/Wood/Code/C/vswork/yolov8_models/best_ds.trt --size=640 --batch_size=1  --img=D:/Wood/Code/C/vswork/yolov8_models/Image_20230310171144605.bmp  --savePath=D:/Wood/Code/C/vswork/yolov8_models/results/result # --show
+# 右键项目 -> 属性 -> 属性配置 -> 调试 -> 命令参数，将上述命令添加进去
+
+# 点击 本地Windows调试器 ok，结果保存在D:/Wood/Code/C/vswork/yolov8_models/results/result_0.jpg
+```
+
+
 
 
 
