@@ -2,9 +2,9 @@
 
 # 前置
 
-1、安装visualstudio2022 【参考从c.pdf】
+### 1、安装visualstudio2022 【参考从c.pdf】
 
-2、安装配置 opencv 4.7.0 【opencv-4.7.0-windows.exe】
+### 2、安装配置 opencv 4.7.0 【opencv-4.7.0-windows.exe】
 
 https://opencv.org/releases/
 
@@ -19,7 +19,7 @@ D:\package\vs\opencv\opencv\build\x64\vc16\bin
 D:\package\vs\opencv\opencv\build\x64\vc16\lib
 ```
 
-3、vs2022创建opencv_demo项目测试
+### 3、vs2022创建opencv_demo项目测试
 
 Cmake: https://learn.microsoft.com/zh-cn/cpp/build/cmake-projects-in-visual-studio?view=msvc-170&viewFallbackFrom=vs-2019
 
@@ -37,7 +37,7 @@ https://github.com/joenali/cmake_win_lib_dll
 
 
 
-4、其他环境
+### 4、其他环境(+YOLOv8 demo)
 
 ```python
 #本地基础环境安装：
@@ -83,7 +83,7 @@ https://developer.nvidia.com/
 
 5、vs2022属性表创建配置
 
-- 新建一个C++孔项目，项目设置为Debug、X64模式【DeployDemo】
+- 新建一个C++空项目，项目设置为Debug、X64模式【DeployDemo】
 - [属性窗口] -> [右击Debug|x64] -> [添加新项目属性表] 【OpenCV4.7.0_DebugX64.props】【OpenCV4.7.0_ReleaseX64.props】
 - 编辑属性表
 
@@ -239,4 +239,105 @@ https://github.com/NagatoYuki0943/anomalib-tensorrt-cpp
 ```
 
 
+
+## 1、模型训练、转onnx
+
+- 模型训练(最新 v7.0)
+
+```python
+# 继续上个模型基础上训练
+python train.py --data data/bp_s1_16k_bb.yaml --cfg models/bp_s1_16k_bb_yolov5s.yaml --weight runs/train/exp19/weights/last.pt --epochs 400 --batch-size 32 --device 0,1
+"""
+Validating runs/train/exp22/weights/best.pt...
+Fusing layers... 
+bp_s1_16k_bb_YOLOv5s summary: 157 layers, 7020913 parameters, 0 gradients, 15.8 GFLOPs
+---------------------------- 111 training:True
+ Class     Images  Instances          P          R      mAP50   mAP50-95: 100%|██████████| 37/37 [00:10<00:00,  3.37it/s]
+   all       2338       2118      0.785        0.9       0.84      0.647
+    BB       2338        460      0.857      0.941      0.952      0.742
+    SY       2338       1615      0.959      0.992      0.993      0.903
+    HS       2338         43       0.54      0.767      0.577      0.297
+Results saved to runs/train/exp22
+"""
+
+# bp_s1_16k_bb.yaml
+# Train/val/test sets as 1) dir: path/to/imgs, 2) file: path/to/imgs.txt, or 3) list: [path/to/imgs1, path/to/imgs2, ..]
+path: /root/dataset/bp_algo/data_pre2/station1/16k/BB_dataset/yolo_dataset  # dataset root dir
+train: images/train  # train images (relative to 'path') 128 images
+val: images/val  # val images (relative to 'path') 128 images
+test:  # test images (optional)
+# Classes
+names:
+  0: BB
+  1: SY
+  2: HS
+  3: QP
+```
+
+- 转onnx
+
+```python
+# https://docs.ultralytics.com/yolov5/tutorials/model_export
+# 模型转换,导出 onnx 文件 yolov5_dynamic.onnx
+python export.py --data data/bp_s1_16k_bb.yaml --weights runs/train/exp22/weights/best.pt --dynamic --include onnx --device 1
+```
+
+## 2、TensorRT模型转换：转trt
+
+```python
+# 使用 TensorRT 编译 onnx 文件
+D:/package/vs/TensorRT-8.5.3.1/bin/trtexec.exe --onnx=./yolov5_dynamic.onnx --saveEngine=./yolov5_dynamic.trt --buildOnly --minShapes=images:1x3x640x640 --optShapes=images:2x3x640x640 --maxShapes=images:4x3x640x640
+```
+
+## 3、Windows部署
+
+新建一个C++空项目，项目设置为Debug、X64模式【Yolov5TrtInference】
+
+- 添加属性列表（参考DeployDemo）
+
+【OpenCV4.7.0_DebugX64.props】
+
+【OpenCV4.7.0_ReleaseX64.props】
+
+【TensorRT_X64.props】
+
+【CUDA 11.6.props】=>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.6\extras\visual_studio_integration\MSBuildExtensions\CUDA 11.6.props
+
+- code【选择全部新建】
+
+```python
+# 将 TensorRT-Alpha/yolov5 中选中的文件app_yolov5.cpp 拷贝到项目的 源文件 中
+
+# 将TensorRT-Alpha/utils 中选中的文件拷贝到项目的 头文件 中
+
+# 最后将TensorRT-8.4.3.1/samples/common 下的 logger.cpp文件拷贝到项目的 资源文件 中
+```
+
+- 生成解决方案
+
+```python
+# 接下来设置 生成依赖项，选择 CUDA 11.6（若没有，见下文 遇到的问题 中有解决方案）
+
+# 然后设置 NVCC 编译 .cu及其对应头文件
+# 选择.cu文件右键 属性->项类型 更改为 CUDA C/C++ ，然后点击应用、确定即可
+
+# 最后，右键 Yolov5TrtInference -> 属性 -> 配置属性 -> 高级 -> 字符集，设置为 未设置
+
+# 点击 生成 -> 生成解决方案，直到成功
+```
+
+- 编译运行
+
+```python
+# 编译运行:修改为 类别数和类别名,类别数 在 app_yolov5.cpp 中修改, 类别名 在 utils.h 中修改
+{0: 'BB', 1: 'SY', 2: 'HS', 3: 'QP'}
+
+# 使用如下命令进行图像的推理
+--model=D:/Wood/Code/C/vswork/yolov5_models/yolov5_dynamic.trt --size=640 --batch_size=1  --img=D:/Wood/Code/C/vswork/yolov5_models/bb.bmp  --savePath=D:/Wood/Code/C/vswork/yolov5_models/results/result # --show
+# 右键项目 -> 属性 -> 属性配置 -> 调试 -> 命令参数，将上述命令添加进去
+
+# 点击 本地Windows调试器 ok，结果保存在D:/Wood/Code/C/vswork/yolov5_models/results/result_0.jpg
+```
+
+## 4、windows上训练
 
