@@ -109,6 +109,9 @@ http://www.hostbuf.com/t/1059.html
 https://code.visualstudio.com/
 https://blog.csdn.net/weixin_48661404/article/details/127308771
 
+# vscode连接本机docker,权限操作，还需reboot重启系统
+https://blog.csdn.net/weixin_51187775/article/details/123279028
+
 su 失败解决方法
 https://blog.csdn.net/weixin_41480156/article/details/113528690
 
