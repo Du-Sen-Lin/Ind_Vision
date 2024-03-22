@@ -2,6 +2,27 @@
 
 # 前置
 
+```python
+#本地基础环境安装：
+# windows3060ti方案：nvidia驱动（是安装ok的）cuda cudnn anaconda pytorch pycharm
+# nvidia-smi查看显卡驱动 30系显卡支持11以上，与10.x版本兼容有问题：11.6  表示显卡驱动最高支持11.6，因此下载cuda版本不能高于这个
+# https://pytorch.org/get-started/previous-versions/ 提前查看准备安装的pytorh版本：v1.12.0版本，windows下要求是11.6/11.3，可以向下兼容
+# cuda: https://developer.nvidia.com/cuda-toolkit-archive 选择安装 11.6
+# 安装路径默认：C:\Users\19478\AppData\Local\Temp\CUDA 选择自定义，将驱动组件取消，其他保持勾选
+# nvcc -V验证
+
+# cudnn: https://developer.nvidia.com/rdp/cudnn-archive 选择安装 v8.7.0 for cuda 11.x
+# nvidia 账号：1947885050@qq.com 密码：Wood123456
+# 将cuda文件夹内的文件复制到安装CUDA所在的对应目录下
+
+# anaconda python3.9版本 路径：C:\Users\19478\anaconda3
+# 配置环境变量 测试Spyder
+conda activate base
+
+```
+
+
+
 ### 1、安装visualstudio2022 【参考从c.pdf】
 
 ### 2、安装配置 opencv 4.7.0 【opencv-4.7.0-windows.exe】
@@ -340,4 +361,239 @@ D:/package/vs/TensorRT-8.5.3.1/bin/trtexec.exe --onnx=./yolov5_dynamic.onnx --sa
 ```
 
 ## 4、windows上训练
+
+
+
+
+
+# 二、FastFlow
+
+## 1、模型训练、转onnx
+
+
+
+## 2、TensorRT模型转换：转trt
+
+```python
+# fastflow_resnet18_big_model
+D:/package/vs/TensorRT-8.5.3.1/bin/trtexec.exe --onnx=fastflow_resnet18_big_model.onnx --saveEngine=fastflow_resnet18_big_model.engine
+
+# fastflow_resnet18_split_model
+D:/package/vs/TensorRT-8.5.3.1/bin/trtexec.exe --onnx=fastflow_resnet18_split_model.onnx --saveEngine=fastflow_resnet18_split_model.engine
+
+# small_efficientad_big_model
+D:/package/vs/TensorRT-8.5.3.1/bin/trtexec.exe --onnx=small_efficientad_big_model.onnx --saveEngine=small_efficientad_big_model.engine
+
+# small_efficientad_split_640_model
+D:/package/vs/TensorRT-8.5.3.1/bin/trtexec.exe --onnx=small_efficientad_split_640_model.onnx --saveEngine=small_efficientad_split_640_model.engine
+
+# yolov8
+D:/package/vs/TensorRT-8.5.3.1/bin/trtexec.exe --onnx=best.onnx --saveEngine=yolov8_obj.engine --buildOnly --minShapes=images:1x3x640x640 --optShapes=images:4x3x640x640 --maxShapes=images:8x3x640x640
+
+# 测试
+
+```
+
+
+
+# 三、final-inspect
+
+新建一个C++空项目 yolomodel,  解决方案名称：final-inspect，项目设置为Debug、X64模式【final-inspect】
+
+新建项目：anomalmodel， 添加已有解决方案final-inspect
+
+新建项目：inferencesdk,  添加已有解决方案final-inspect
+
+新建项目：run_app, 添加已有解决方案final-inspect
+
+## 1、添加属性列表（参考DeployDemo）
+
+【OpenCV4.7.0_DebugX64.props】
+
+【OpenCV4.7.0_ReleaseX64.props】
+
+【TensorRT_X64.props】
+
+【CUDA 11.6.props】=>C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.6\extras\visual_studio_integration\MSBuildExtensions\CUDA 11.6.props
+
+**注意：CUDA 11.6.props也可以不添加属性文件，在项目右键，生成依赖项-生成自定义文件-勾选cuda11.6也可以实现相同目的。**
+
+Tensorrt 环境更换测试
+
+```python
+# 不一致环境相关包下载：以下为松哥环境
+cuda 11.6
+cudnn  8.3.2
+Tensorrt 8.5.1.7
+opencv 4.6
+
+# 我的环境
+cuda 11.6
+cudnn  8.7.0
+Tensorrt 8.5.3.1
+opencv 4.7.0
+
+# 对比，导出trt的模型与编译代码的Tensorrt版本需要保持一致，所以需要下载8.5.1.7版本的Tensorrt。与松哥的保持一致。其他版本不需要变动。
+https://developer.nvidia.com/
+
+# 选择 TensorRT 8.5 GA for Windows 10 and CUDA 11.0, 11.1, 11.2, 11.3, 11.4, 11.5, 11.6, 11.7 and 11.8 ZIP Package
+【TensorRT-8.5.1.7.Windows10.x86_64.cuda-11.8.cudnn8.6.zip】
+
+解压到【D:\package\vs\TensorRT-8.5.1.7】
+
+添加环境变量：【D:\package\vs\TensorRT-8.5.1.7\lib】 #需要删掉原有的环境变量，否则不能覆盖 D:\package\vs\TensorRT-8.5.3.1\lib
+# 创建TensorRT属性表 【TensorRT_X64.props】， debug与release下配置一致, 配置好之后主要release配置直接添加现有属性表即可。
+# include路径 【拷贝include路径】[通用属性] -> [VC++目录] -> [包含目录] -> [编辑]
+D:\package\vs\TensorRT-8.5.1.7\include
+D:\package\vs\TensorRT-8.5.1.7\samples\common
+D:\package\vs\TensorRT-8.5.1.7\samples\common\windows
+# lib路径 【拷贝lib路径，外加设置dll到系统环境变量】[通用属性] -> [VC++目录] -> [库目录] -> [编辑] 
+path/to/TensorRT-8.5.1.7/lib
+# lib文件名称（for release& debug） 【拷贝lib文件名称】[通用属性] -> [链接器] -> [输入] -> [附加依赖项] -> 将文件
+nvinfer.lib
+nvinfer_plugin.lib
+nvonnxparser.lib
+nvparsers.lib
+# 最后，修改tensorrt属性表：[通用属性] -> [C/C++] -> [预处理器] -> [预处理器定义] -> 添加指令：_CRT_SECURE_NO_WARNINGS -> [确认]
+```
+
+
+
+## 2、环境代码测试
+
+### 1、Code
+
+将.cu，.h文件放入头文件，.cpp文件放入源文件。
+
+weights:
+
+```python
+# D:\Wood\Code\C\vswork\yolov8_models\models\pre\weights
+```
+
+- error1
+
+```python
+严重性	代码	说明	项目	文件	行	禁止显示状态
+错误(活动)	E0135	命名空间 "std" 没有成员 "filesystem"	inferencesdk	D:\Wood\Code\C\vswork\final-inspect\final-inspect\inferencesdk\front_dark_infer.cpp	9	
+
+# 解决：当前使用的 默认(ISO C++14 标准)， 项目属性中设置 "C++ Language Standard" 为 "ISO C++17 Standard (/std:c++17)"。
+```
+
+- 属性表修改字符集，不能用unicode
+
+```
+属性-高级-字符集：使用多字节字符集
+```
+
+- 属性表 NOMINMAX
+
+```
+属性-C/C++-预处理器-预处理器定义：
+NOMINMAX 
+NDEBUG
+```
+
+- dll文件，添加对应的项目依赖。
+
+```
+对应项目-生成依赖项-inferencesdk添加对应依赖为（anomalmodel, yolomodel）
+对应项目-生成依赖项-run_app添加对应依赖为（inferencesdk）
+```
+
+- 然后设置 NVCC 编译 .cu及其对应头文件
+
+```
+# 然后设置 NVCC 编译 .cu及其对应头文件
+# 选择.cu文件右键 属性->项类型 更改为 CUDA C/C++ ，然后点击应用、确定即可
+```
+
+- inference_sdk_only 库目录添加，使得生成的yolo anomal 对应的lib文件导进来
+
+```python
+# $(SolutionDir): 表示解决方案文件（.sln 文件）所在的目录路径
+# $(Platform): 表示当前项目的目标平台。x64
+# $(Configuration): 表示当前项目的配置。常见的值包括 Debug 和 Release。该宏通常用于区分不同配置下的库文件。
+# 所以表示路径 D:\Wood\Code\C\vswork\final-inspect\final-inspect\x64\Release
+$(SolutionDir)$(Platform)\$(Configuration)
+```
+
+- run_app 需要把对应的3个导进来，库目录 编辑添加：  链接器-输入-附加依赖项：把lib文件加进来
+
+```python
+# 库目录
+$(SolutionDir)$(Platform)\$(Configuration)
+# 链接器-输入-附加依赖项
+anomalmodel.lib
+inferencesdk.lib
+yolomodel.lib
+```
+
+- 测试(front_dark_config_test.json)：需要使用对应的TensorRT导出的模型和编译的lib文件才能成功运行。
+
+```C++
+std::string image_path = "D:/Wood/Code/C/vswork/final-inspect/final-inspect/images/P20230724-122851_Bright_12.png";
+std::string config_path = "D:/Wood/Code/C/vswork/final-inspect/final-inspect/weights/front_dark_config_test.json";
+```
+
+```json
+{
+    "yolo_config":
+     {"model_name": "yolov8_obj.engine", "num_class": 1,
+      "class_names": ["obj"], 
+      "input_output_names": ["images", "output0"], "dynamic_batch": false, "batch_size": 1, 
+      "src_h": 1024, "src_w": 1024, "dst_h": 640, "dst_w": 640, "conf_thresh": 0.25, "iou_thresh": 0.45},
+     "anomal_config": {"model_name": "fastflow_resnet18_big_model.engine", 
+     "image_threshold": 25.632612228393555, "pixel_threshold": 43.37532043457031, "min_conf": 0.060677364468574524, "max_conf": 70.50257873535156, 
+     "dst_h": 1024, "dst_w": 1024, "efficient_ad": false, "dynamic_batch": false}, 
+     "cv_config": 
+     {"area_min_threshold": 50.0, "area_max_threshold": 10000.0, "bin_threshlod": 158, "nheight": 1024, "nwidth": 1024, "padding": 32}}
+```
+
+- 新建项目：创建动态链接库（dll），会自动生成 framework.h pch.h头文件，dllmain.cpp pch.cpp文件。
+- 项目开发规则
+
+```python
+# 1、代码工程规则
+dll 与 lib文件提供， include目录。
+
+# 2、返回结果数据格式
+坐标1：图像坐标；
+坐标2：相对于圆心的偏移坐标。（cv找晶圆圆心，担心有偏移，map图。）
+conf
+area
+classId （不重要）
+className
+
+# 以防代码冲突，可以添加新项目
+
+# 测试效果方法：结果框画图
+
+# cudnn版本也需要测试一下
+
+# 工位配置（电脑）
+1工位：
+	面阵量测（1个相机2500w黑白 - 仇华）
+	倒角面（2个500w面阵彩色 - 赵松） ok
+
+2工位：
+	正面微观(1个4k黑白-仇华)：
+	正面微观复检（1个500w黑白-仇华）
+
+3工位：2张3090
+	正面宏观-暗场（1个8k黑白-赵松）：FrontDarkInfer
+    背面宏观-明场（1个8k彩色-杜森林）：
+        数据在过程检：当前没数据，我们设备4月份运过去，再在我们设备上采图。
+        数据来源：
+	背面宏观-暗场（1个8k黑白-赵松）：BackDarkLineInfer
+	背面宏观-暗场（1给6500w彩色-赵松）
+
+先分尺寸（5/6/8寸），每一种尺寸再分不同工艺，背面有3种工艺（颜色、形态都会有变化）；
+```
+
+### 2、代码理解
+
+```python
+
+```
 
