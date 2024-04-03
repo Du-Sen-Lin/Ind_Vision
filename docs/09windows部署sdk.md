@@ -442,7 +442,7 @@ https://developer.nvidia.com/
 解压到【D:\package\vs\TensorRT-8.5.1.7】
 
 添加环境变量：【D:\package\vs\TensorRT-8.5.1.7\lib】 #需要删掉原有的环境变量，否则不能覆盖 D:\package\vs\TensorRT-8.5.3.1\lib
-# 创建TensorRT属性表 【TensorRT_X64.props】， debug与release下配置一致, 配置好之后主要release配置直接添加现有属性表即可。
+# 创建TensorRT属性表 【TensorRT_X64_8517.props】， debug与release下配置一致, 配置好之后主要release配置直接添加现有属性表即可。
 # include路径 【拷贝include路径】[通用属性] -> [VC++目录] -> [包含目录] -> [编辑]
 D:\package\vs\TensorRT-8.5.1.7\include
 D:\package\vs\TensorRT-8.5.1.7\samples\common
@@ -574,7 +574,7 @@ className
 # 工位配置（电脑）
 1工位：
 	面阵量测（1个相机2500w黑白 - 仇华）
-	倒角面（2个500w面阵彩色 - 赵松） ok
+	倒角面（2个500w面阵彩色 - 赵松） ChamferInfer 
 
 2工位：
 	正面微观(1个4k黑白-仇华)：
@@ -591,9 +591,160 @@ className
 先分尺寸（5/6/8寸），每一种尺寸再分不同工艺，背面有3种工艺（颜色、形态都会有变化）；
 ```
 
-### 2、代码理解
+### 2、代码开发
+
+#### 2-1、参数配置文件
+
+```json
+{
+    "pre_config": {
+        "model_name": "back_light_line_yolov8_obj_pre.engine",
+        "num_class": 1,
+        "class_names": ["obj"],
+        "input_output_names": ["images", "output0"],
+        "dynamic_batch": false,
+        "batch_size": 1,
+        "src_h": 8000,
+        "src_w": 8320,
+        "dst_h": 640,
+        "dst_w": 640,
+        "conf_thresh": 0.25,
+        "iou_thresh": 0.45
+    },
+    "yolo_config": {
+        "model_name": "back_light_line_yolov8_obj.engine",
+        "num_class": 1,
+        "class_names": [
+            "obj"
+        ],
+        "input_output_names": [
+            "images",
+            "output0"
+        ],
+        "dynamic_batch": false,
+        "batch_size": 1,
+        "src_h": 1024,
+        "src_w": 1024,
+        "dst_h": 640,
+        "dst_w": 640,
+        "conf_thresh": 0.25,
+        "iou_thresh": 0.45
+    },
+    "anomal_config": {
+        "model_name": "back_light_line_fastflow_resnet18_big_model.engine",
+        "image_threshold": 25.632612228393555,
+        "pixel_threshold": 43.37532043457031,
+        "min_conf": 0.060677364468574524,
+        "max_conf": 70.50257873535156,
+        "dst_h": 1024,
+        "dst_w": 1024,
+        "efficient_ad": false,
+        "dynamic_batch": false
+    },
+    "cv_config": {
+        "area_min_threshold": 50,
+        "area_max_threshold": 10000,
+        "bin_threshlod": 158,
+        "nheight": 1024,
+        "nwidth": 1024,
+        "padding": 32
+    }
+}
+```
+
+
+
+#### 2-2、修改代码 front_dark_infer.h / front_dark_infer.cpp
 
 ```python
+# 模型转换
+# back_light_line_yolov8_obj_pre.engine 背面明场预处理检测模型
+D:/package/vs/TensorRT-8.5.1.7/bin/trtexec.exe --onnx=best.onnx --saveEngine=back_light_line_yolov8_obj_pre.engine --buildOnly --minShapes=images:1x3x640x640 --optShapes=images:4x3x640x640 --maxShapes=images:8x3x640x640
 
+# back_light_line_yolov8_obj.engine 背面明场目标检测大模型
+D:/package/vs/TensorRT-8.5.1.7/bin/trtexec.exe --onnx=best.onnx --saveEngine=back_light_line_yolov8_obj.engine --buildOnly --minShapes=images:1x3x640x640 --optShapes=images:4x3x640x640 --maxShapes=images:8x3x640x640
+
+# back_light_line_fastflow_resnet18_big_model.engine 背面明场异常检测大模型
+D:/package/vs/TensorRT-8.5.1.7/bin/trtexec.exe --onnx=fastflow_resnet18_big_model.onnx --saveEngine=back_light_line_fastflow_resnet18_big_model.engine
+
+
+# back_light_line_fastflow_resnet18_split_model.engine 背面明场异常检测大模型
+D:/package/vs/TensorRT-8.5.1.7/bin/trtexec.exe --onnx=fastflow_resnet18_split_model.onnx --saveEngine=back_light_line_fastflow_resnet18_split_model.engine
+```
+
+
+
+#### 2-3、新建项目anomalydetect：
+
+- 创建动态链接库（dll），会自动生成 framework.h pch.h头文件，dllmain.cpp pch.cpp文件。
+
+- 预编译头报错
+
+```python
+# 报错C1010
+"""
+严重性	代码	说明	项目	文件	行	禁止显示状态
+错误	C1010	在查找预编译头时遇到意外的文件结尾。是否忘记了向源中添加“#include "pch.h"”?	anomalydetect	D:\Wood\Code\C\vswork\final-inspect\final-inspect\anomalydetect\logger.cpp	40	
+"""
+
+# 解决办法 anomalydetect
+在 Visual Studio 中打开项目。
+右键单击项目，在上下文菜单中选择“属性”。
+在属性页中，选择“C/C++” -> “预编译头”。
+ 1、 将“预编译头”设置为“未使用预编译头”，并且预编译头文件设置为：stdafx.h； 报错；
+    2、使用 (/Yu)；pch.h；anomalydetect能成功生成；inferencesdk不能生成，会报错。 将inferencesdk也改成 使用 (/Yu)；pch.h； 所有的都修改。还是报错。
+    3、全部修改为“未使用预编译头”，并且预编译头文件设置为：stdafx.h； 重新创建项目anomalydetect，不创建dll项目，创建空项目。
+```
+
+- `LNK2001` 错误
+
+```python
+# 报错
+"""
+严重性	代码	说明	项目	文件	行	禁止显示状态
+错误	LNK2001	无法解析的外部符号 "__declspec(dllimport) const BackLightLineInfer::`vftable'" (__imp_??_7BackLightLineInfer@@6B@)	inferencesdk	D:\Wood\Code\C\vswork\final-inspect\final-inspect\inferencesdk\front_dark_infer.obj	1	
+"""
+误表明链接器无法解析 BackLightLineInfer 类的虚函数表（vftable），导致链接失败。这种情况通常发生在编译器找不到类的实现的情况下。
+
+# 解决办法:inferencesdk项目中 （为解决，最后重新创建项目anomalydetect，不创建dll项目，创建空项目。）
+在项目属性的“链接器”设置中的“输入”选项卡下添加需要链接的库文件。 例如：anomalydetect.lib
+inference_sdk_only中，添加包含目录： $(SolutionDir)anomalydetect
+inference_sdk_only中，添加“链接器”设置中的“输入”：anomalydetect.lib
+```
+
+- 未解决，重新新建dll项目，一步一步添加测试。
+
+```C++
+找了很久，是这儿 
+// virtual ~CommonLightInfer();
+~CommonLightInfer(); 不使用virtual ~CommonLightInfer();就不报错了，为什么？？？？？？？？？？？？
+	
+//在基类可能被继承时，通常建议将析构函数声明为虚函数。当使用基类指针指向派生类对象，并通过基类指针调用 delete 释放内存时，如果基类的析构函数不是虚函数，将无法触发派生类的析构函数，可能导致内存泄漏和未定义行为。因此，为了确保正确的对象销毁行为，在可能被继承的基类中，通常会将析构函数声明为虚函数。
+// 析构函数声明为虚函数会报错 => 如果基类不包含任何纯虚函数，而且你不打算通过基类指针删除派生类对象，那么基类的析构函数不需要声明为虚函数。
+// 非虚函数也可以在派生类中被重写 => 在派生类中定义的函数会隐藏父类中相同名称的函数。
+    
+    
+// 只要添加虚函数则报错：错误可能是由于缺少 CommonLightInfer 类的虚函数表（vtable）导致的。通常情况下，当一个类中有虚函数时，编译器会为该类生成虚函数表，以便在运行时进行动态绑定。但是，你所描述的情况下，报错信息表明生成的 DLL 文件无法找到 CommonLightInfer 类的虚函数表，可能是由于链接问题或者编译器设置不正确导致的。
+/**
+    严重性	代码	说明	项目	文件	行	禁止显示状态
+错误	LNK2001	无法解析的外部符号 "__declspec(dllimport) const CommonLightInfer::`vftable'" (__imp_??_7CommonLightInfer@@6B@)	inferencesdk	D:\Wood\Code\C\vswork\final-inspect\final-inspect\inferencesdk\front_dark_infer.obj	1	
+*/ 
+
+// 修改为纯虚函数：基类中就不需要提供函数的实现，而是通过 = 0 进行声明。这样做的目的是让基类成为一个抽象类，只用于定义接口，并且派生类必须重写这个纯虚函数，否则也会成为抽象类，无法实例化。 ==》一样报错。
+
+// 最后：不使用虚函数。都放在 CommonLightInfer类中。  OK.
+```
+
+- 调试
+
+```python
+=================Use anomal_model_big ==============
+Bounding Box: (5149, 3742) - (5405, 3982)Bounding BoxOffset: (0, 0) - (0, 0) | Area: 1094 | Confidence: 1 | Class ID: 1 | Class Name: NG
+Bounding Box: (6375, 5175) - (6475, 5282)Bounding BoxOffset: (0, 0) - (0, 0) | Area: 160 | Confidence: 1 | Class ID: 1 | Class Name: NG
+Bounding Box: (4943, 3666) - (5018, 3761)Bounding BoxOffset: (0, 0) - (0, 0) | Area: 85.5 | Confidence: 1 | Class ID: 1 | Class Name: NG
+Bounding Box: (6713, 2290) - (6775, 2378)Bounding BoxOffset: (0, 0) - (0, 0) | Area: 83.5 | Confidence: 1 | Class ID: 1 | Class Name: NG
+
+=================Use anomal_model_split==============
+Bounding Box: (5242, 3827) - (5303, 3897)Bounding BoxOffset: (0, 0) - (0, 0) | Area: 616 | Confidence: 1 | Class ID: 1 | Class Name: NG
 ```
 
